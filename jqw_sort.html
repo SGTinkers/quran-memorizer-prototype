@@ -1,0 +1,566 @@
+<!DOCTYPE html >
+<html lang="ar">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+
+  <title>Quran - Word by Word</title>
+  <link rel="stylesheet" href="css/materialize.min.css">
+
+  <!-- Compiled and minified JavaScript -->
+  <script src="http://code.jquery.com/jquery-1.7.2.min.js"></script>
+  <script src="http://code.jquery.com/ui/1.8.21/jquery-ui.min.js"></script>
+  <script src="js/jquery.ui.touch-punch.min.js"></script>
+  <script src="js/materialize.min.js"></script>
+  <script src="js/howler.min.js"></script>
+
+  <style>
+  @font-face {
+    font-family: PDMS_Saleem_QuranFont;
+    src: url(css/PDMS_Saleem_QuranFont-signed.ttf);
+  }
+
+  @font-face {
+    font-family: Scheherazade;
+    src: url(css/Scheherazade-R.woff);
+  }
+
+  @font-face {
+    font-family: MeQuran;
+    src: url(css/me_quran-webfont.ttf);
+  }
+
+  @font-face {
+    font-family: ZekrQuran;
+    src: url(css/ZekrQuran.ttf);
+  }
+
+  .verse {
+    direction: rtl;
+  }
+
+  .word {
+    display: inline-block;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 2px;
+    font-size: 1.5em;
+    /*border: 1px solid #DDDDDD;
+    border-radius: 5px;*/
+    margin-right: 0.2em;
+    cursor: pointer;
+    cursor: hand;
+    text-align: center;
+    font-family: ZekrQuran;
+  }
+
+  .arabic {
+    direction: rtl;
+  }
+
+ .meaning {
+    font-size: 0.4em;
+    margin-top: 5px;
+    color: grey;
+    font-style: italic;
+    text-align: center;
+    direction: ltr;
+    font-family: Helvetica, Arial, sans-serif;
+ }
+
+ .timing {
+   font-size: 0.4em;
+   text-align: center;
+   direction: ltr;
+   color: orange;
+   font-family: Helvetica, Arial, sans-serif;
+ }
+
+ #template {
+    display: none;
+ }
+
+ .content {
+    direction: rtl;
+ }
+
+ .noselect {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+</style>
+<script>
+  var playMode = getParameterByName("playMode") == "false" ? false : true;
+  var spriteMode = false;
+
+  var soundReady = false;
+  var soundCounterInterval;
+  var soundOptions = {
+    src: [],
+    rate: playMode ? 1.0 : 0.8,
+    html5: true,
+    onload: function() {
+      soundReady = true;
+      $("#loading-recitation").hide();
+    }
+    /*onplay: function() {
+      soundCounterInterval = setInterval(function () {  }, 1000); // console.log("currentPlayback: " + sound.seek());
+    },
+    onpause: function() {
+      if (soundCounterInterval) {
+        window.clearInterval(soundCounterInterval);
+      }
+    }*/
+  };
+
+  (function($) {
+    $("html").keydown(function(e) {
+      if (e.keyCode == 13) {
+        if (sound.playing()) {
+          sound.pause();
+        } else {
+          sound.play();
+        }
+        return false;
+      }
+
+      if (e.keyCode == 32) {
+        if (playMode) return;
+
+        var el = $('.content .timing[time=""]:first');
+        if (el) {
+          markTime(el.parent());
+        }
+
+        return false;
+      }
+
+      if (e.keyCode == 220) {
+        if (playMode) return;
+
+        var sprites = [];
+        var i = 0;
+        $('.content .timing[time!=""]').each(function() {
+          sprites.push({verseIndex: parseInt($(this).parent().attr("verse")), pos: parseInt($(this).parent().attr("pos")), time: parseFloat($(this).attr("time"))});
+        });
+
+        var spriteObj = {};
+        for (var i = 0; i < sprites.length; i++) {
+          spriteObj[sprites[i].verseIndex + "-" + sprites[i].pos] = [sprites[i].time, 0];
+        }
+
+        var jsonObject = JSON.stringify(spriteObj);
+        localStorage.setItem("data[\"" + suraInd + "\"][\"marks\"]", jsonObject);
+        console.log(jsonObject);
+
+        alert("Saved to local storage.");
+
+        return false;
+      }
+
+      if (e.keyCode == 8) {
+        if (playMode) return;
+
+        var el = $('.content .timing[time!=""]').filter(":last");
+        if (el) {
+          el.css("display", "none");
+          el.attr("time", "");
+
+          var seek = parseFloat($('.content .timing[time!=""]').filter(":last").attr("time"));
+          if (seek) {
+            console.log("Seeking to: " + seek);
+            sound.seek(seek);
+          }
+        }
+
+        return false;
+      }
+
+      if (e.keyCode == 37) {
+        var seek = sound.seek();
+        console.log("Seeking to -> " + Math.round(seek + 1));
+        sound.seek(Math.round(seek + 1));
+        return false;
+      }
+
+      if (e.keyCode == 38) {
+        return false;
+      }
+
+      if (e.keyCode == 39) {
+        var seek = sound.seek();
+        console.log("Seeking to <- " + Math.round(seek - 1));
+        sound.seek(Math.round(seek - 1));
+        return false;
+      }
+
+      if (e.keyCode == 40) {
+        return false;
+      }
+    });
+
+    $.fn.randomize = function(childElem) {
+      return this.each(function() {
+          var $this = $(this);
+          var elems = $this.children(childElem);
+
+          elems.sort(function() { return (Math.round(Math.random())-0.5); });
+
+          $this.detach(childElem);
+
+          for(var i=0; i < elems.length; i++)
+            $this.append(elems[i]);
+
+      });
+    }
+  })(jQuery);
+
+  function makeSortable(selector) {
+    $(selector).sortable({
+      delay: 300,
+      activate: function(event, ui) {
+        navigator.vibrate(100);
+      },
+      update: function(event, ui) {
+        var verseIndex = $(this).attr("verseIndex");
+        var verse = verses[verseIndex];
+        var arabicVerse = "";
+
+        for (var i = 0; i < verse.length; i++) {
+          arabicVerse += verse[i].arabic;
+        }
+
+        if ($(this).find(".arabic").text() == arabicVerse) {
+          $(this).css("color", "green");
+        } else {
+          $(this).css("color", "red");
+        }
+      }
+    });
+  }
+
+  function createWordElement(arabic, meaning) {
+    var el = $("#template .word").clone();
+
+    el.find(".arabic").text(arabic);
+    el.find(".meaning").text(meaning);
+
+    return el;
+  }
+
+  function createVerseElement() {
+    var el = $("#template .verse").clone();
+
+    return el;
+  }
+
+  function markTime(el) {
+    var time = Math.round(sound.seek() * 100) / 100;
+    $(el).find(".timing").attr("time", time);
+    $(el).find(".timing").text(time);
+    $(el).find(".timing").css("display", "block");
+  }
+
+  function createVerse(verse, verseIndex, verseFullIndex) {
+    var verseEl = createVerseElement();
+
+    for (var i = 0; i < verse.words.length; i++) {
+      var word = createWordElement(verse.words[i], translations[verseFullIndex + ":" + (i + 1)]);
+      word.attr("verse", verseIndex);
+      word.attr("pos", i);
+      var time = audioTimemarks[verseIndex + "-" + i][0];
+
+      word.find(".timing").attr("time", time);
+      word.find(".timing").text(time);
+
+      if (!playMode && audioTimemarks[verseIndex + "-" + i]) {
+        word.find(".timing").css("display", "block");
+      }
+      word.appendTo(verseEl);
+      word.click(function() {
+        var verse = $(this).attr("verse");
+        var pos = $(this).attr("pos");
+        var spriteId = verse + "-" + pos;
+
+        if (spriteMode) {
+          console.log("Playing " + spriteId);
+          sound.stop();
+          sound.play(spriteId);
+        } else {
+          var timeStr = $(this).find(".timing").attr("time");
+          var seekPos = parseFloat(timeStr);
+
+          if (isNaN(seekPos)) return true;
+
+          console.log("Seeking to " + seekPos);
+          sound.stop();
+          sound.play();
+          sound.seek(seekPos);
+        }
+      });
+    };
+
+    var verseNumber = $("#template .verse-number").clone();
+    verseNumber.find(".verse-index").text(verseIndex+1);
+    verseNumber.appendTo(verseEl);
+
+    //verseEl.randomize(".word");
+    var outer = $("<li></li>");
+    outer.addClass("collection-item");
+
+    verseEl.attr("verseIndex", verseIndex);
+    verseEl.appendTo(outer);
+
+    outer.appendTo($(".content"));
+
+    //makeSortable(verseEl);
+  }
+
+  function randomizeAllVerse() {
+    $(".content .verse").each(function(){
+      $(this).randomize(".word");
+    });
+    $(".word").css("color", "black");
+  }
+
+  function toggleTranslation() {
+    if ($(".meaning").is(':visible')) {
+      $(".meaning").hide("fade");
+    } else {
+      $(".meaning").show("fade");
+    }
+  }
+
+  function getParameterByName(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+  }
+
+  var suraInd = getParameterByName("sura");
+  if (!suraInd) {
+    suraInd = 67;
+  } else {
+    suraInd = parseInt(suraInd);
+  }
+
+  var suras = [];
+  var translations = [];
+  var audioTimemarks = {};
+
+  var sound;
+
+  $(function() {
+    $.getJSON("quran.json", function(data) {
+      suras = data;
+      $(".surah-title").text(suras[suraInd - 1].name);
+
+      $.getJSON("timemark.json", function(data) {
+        if (data[suraInd + ""]) {
+          if (localStorage.getItem("data[\"" + suraInd + "\"][\"marks\"]")) {
+            data[suraInd + ""].marks = JSON.parse(localStorage.getItem("data[\"" + suraInd + "\"][\"marks\"]"));
+          }
+
+          if (Object.keys(data[suraInd + ""].marks).length > 0) {
+            audioTimemarks = data[suraInd + ""]["marks"];
+
+            /*if (playMode && spriteMode && audioTimemarks) {
+              soundOptions.sprite = audioTimemarks;
+            }*/
+          }
+
+          soundOptions.src = data[suraInd + ""].files;
+          sound = new Howl(soundOptions);
+        }
+
+        $.getJSON("translations.json", function(data) {
+          translations = data;
+
+          for (var i = 0; i < suras[suraInd - 1].ayas.length; i++) {
+            createVerse(suras[suraInd - 1].ayas[i], i, suraInd + ":" + (i + 1));
+          };
+        });
+      });
+    });
+  });
+
+
+    /*var verses = [[
+      {arabic: "تَبَارَكَ", meaning: "Blessed is"},
+      {arabic: "الَّذِي", meaning: "He"},
+      {arabic: "بِيَدِهِ", meaning: "in Whose Hand"},
+      {arabic: "الْمُلْكُ", meaning: "(is) the Dominion,"},
+      {arabic: "وَهُوَ", meaning: "and He"},
+      {arabic: "عَلَىٰ", meaning: "(is) over"},
+      {arabic: "كُلِّ", meaning: "every"},
+      {arabic: "شَيْءٍ", meaning: "thing"},
+      {arabic: "قَدِيرٌ", meaning: "All-Powerful."}
+    ],
+    [
+      {arabic: "الَّذِي", meaning: "The One Who"},
+      {arabic: "خَلَقَ", meaning: "created"},
+      {arabic: "الْمَوْتَ", meaning: "death"},
+      {arabic: "وَالْحَيَاةَ", meaning: "and life"},
+      {arabic: "لِيَبْلُوَكُمْ", meaning: "that He may test you,"},
+      {arabic: "أَيُّكُمْ", meaning: "which of you"},
+      {arabic: "أَحْسَنُ", meaning: "(is) best"},
+      {arabic: "عَمَلًا  ۖ", meaning: "(in) deed."},
+      {arabic: "وَهُوَ", meaning: "And He"},
+      {arabic: "الْعَزِيزُ", meaning: "(is) the All-Mighty,"},
+      {arabic: "الْغَفُورُ", meaning: "the Oft-Forgiving."}
+    ],
+    [
+      {arabic: "الَّذِي", meaning: "The One Who"},
+      {arabic: "خَلَقَ", meaning: "created"},
+      {arabic: "سَبْعَ", meaning: "seven"},
+      {arabic: "سَمَاوَاتٍ", meaning: "heavens"},
+      {arabic: "طِبَاقًا ۖ", meaning: "one above another."},
+      {arabic: "مَا", meaning: "Not"},
+      {arabic: "تَرَىٰ", meaning: "you see"},
+      {arabic: "فِي", meaning: "in"},
+      {arabic: "خَلْقِ", meaning: "(the) creation"},
+      {arabic: "الرَّحْمَٰنِ", meaning: "(of) the Most Gracious"},
+      {arabic: "مِنْ", meaning: "any"},
+      {arabic: "تَفَاوُتٍ ۖ", meaning: "fault."},
+      {arabic: "فَارْجِعِ", meaning: "So return"},
+      {arabic: "الْبَصَرَ", meaning: "the vision,"},
+      {arabic: "هَلْ", meaning: "can"},
+      {arabic: "تَرَىٰ", meaning: "you see"},
+      {arabic: "مِنْ", meaning: "any"},
+      {arabic: "فُطُورٍ", meaning: "flaw?"}
+    ],
+    [
+      {arabic: "ثُمَّ", meaning: "Then"},
+      {arabic: "ارْجِعِ", meaning: "return"},
+      {arabic: "الْبَصَرَ", meaning: "the vision"},
+      {arabic: "كَرَّتَيْنِ", meaning: "twice (again)."},
+      {arabic: "يَنْقَلِبْ ۖ", meaning: "Will return"},
+      {arabic: "إِلَيْكَ", meaning: "to you"},
+      {arabic: "الْبَصَرُ", meaning: "the vision"},
+      {arabic: "خَاسِئًا", meaning: "humbled"},
+      {arabic: "وَهُوَ", meaning: "while it"},
+      {arabic: "حَسِيرٌ", meaning: "(is) fatigued."}
+    ],
+    [
+      {arabic: "وَلَقَدْ", meaning: "And certainly"},
+      {arabic: "زَيَّنَّا", meaning: "We have beautified"},
+      {arabic: "السَّمَاءَ", meaning: "the heaven"},
+      {arabic: "الدُّنْيَا", meaning: "nearest"},
+      {arabic: "بِمَصَابِيحَ ۖ", meaning: "with lamps,"},
+      {arabic: "وَجَعَلْنَاهَا", meaning: "and We have made them"},
+      {arabic: "رُجُومًا", meaning: "(as) missiles"},
+      {arabic: "لِلشَّيَاطِينِ ۖ", meaning: "for the devils,"},
+      {arabic: "وَأَعْتَدْنَا", meaning: "and We have prepared"},
+      {arabic: "لَهُمْ", meaning: "for them"},
+      {arabic: "عَذَابَ", meaning: "punishment"},
+      {arabic: "السَّعِيرِ", meaning: "(of) the Blaze."}
+    ],
+    [
+      {arabic: "وَلِلَّذِينَ", meaning: "And for those who"},
+      {arabic: "كَفَرُوا", meaning: "disbelieved"},
+      {arabic: "بِرَبِّهِمْ", meaning: "in their Lord"},
+      {arabic: "عَذَابُ", meaning: "(is the) punishment"},
+      {arabic: "جَهَنَّمَ ۖ", meaning: "(of) Hell,"},
+      {arabic: "وَبِئْسَ", meaning: "and wretched is"},
+      {arabic: "الْمَصِيرُ", meaning: "the destination."}
+    ],
+    [
+      {arabic: "إِذَا", meaning: "When"},
+      {arabic: "أُلْقُوا", meaning: "they are thrown"},
+      {arabic: "فِيهَا", meaning: "therein,"},
+      {arabic: "سَمِعُوا", meaning: "they will hear"},
+      {arabic: "لَهَا", meaning: "from it"},
+      {arabic: "شَهِيقًا", meaning: "an inhaling"},
+      {arabic: "وَهِيَ", meaning: "while it"},
+      {arabic: "تَفُورُ", meaning: "boils up."}
+    ],
+    [
+      {arabic: "تَكَادُ", meaning: "It almost"},
+      {arabic: "تَمَيَّزُ", meaning: "bursts"},
+      {arabic: "مِنَ", meaning: "from"},
+      {arabic: "الْغَيْظِ ۖ", meaning: "rage."},
+      {arabic: "كُلَّمَا", meaning: "Every time"},
+      {arabic: "أُلْقِيَ", meaning: "is thrown"},
+      {arabic: "فِيهَا", meaning: "therein"},
+      {arabic: "فَوْجٌ", meaning: "a group,"},
+      {arabic: "سَأَلَهُمْ", meaning: "(will) ask them"},
+      {arabic: "خَزَنَتُهَا", meaning: "its keepers,"},
+      {arabic: "أَلَمْ", meaning: "\"Did not"},
+      {arabic: "يَأْتِكُمْ", meaning: "come to you"},
+      {arabic: "نَذِيرٌ", meaning: "a warner?\""}
+    ],
+    [
+      {arabic: "قَالُوا", meaning: "They will say"},
+      {arabic: "بَلَىٰ", meaning: "\"Yes,"},
+      {arabic: "قَدْ", meaning: "indeed"},
+      {arabic: "جَاءَنَا", meaning: "came to us"},
+      {arabic: "نَذِيرٌ", meaning: "a warner,"},
+      {arabic: "فَكَذَّبْنَا", meaning: "but we denied"},
+      {arabic: "وَقُلْنَا", meaning: "and we said,"},
+      {arabic: "مَا", meaning: "\"Not"},
+      {arabic: "نَزَّلَ", meaning: "has sent down"},
+      {arabic: "اللَّهُ", meaning: "Allah"},
+      {arabic: "مِنْ", meaning: "any"},
+      {arabic: "شَيْءٍ", meaning: "thing."},
+      {arabic: "إِنْ", meaning: "Not"},
+      {arabic: "أَنْتُمْ", meaning: "you (are)"},
+      {arabic: "إِلَّا", meaning: "but"},
+      {arabic: "فِي", meaning: "in"},
+      {arabic: "ضَلَالٍ", meaning: "error"},
+      {arabic: "كَبِيرٍ", meaning: "great.\""}
+    ],
+    [
+      {arabic: "وَقَالُوا", meaning: "And they will say,"},
+      {arabic: "لَوْ", meaning: "\"If"},
+      {arabic: "كُنَّا", meaning: "we had"},
+      {arabic: "نَسْمَعُ", meaning: "listened"},
+      {arabic: "أَوْ", meaning: "or"},
+      {arabic: "نَعْقِلُ", meaning: "reasoned,"},
+      {arabic: "مَا", meaning: "not"},
+      {arabic: "كُنَّا", meaning: "we (would) have been"},
+      {arabic: "فِي", meaning: "among"},
+      {arabic: "أَصْحَابِ", meaning: "(the) companions"},
+      {arabic: "السَّعِيرِ", meaning: "(of) the Blaze.\""}
+    ]
+    ];
+
+    var translations = {};
+    for (var i = 0; i < verses.length; i++) {
+      for (var j = 0; j < verses[i].length; j++) {
+        translations["67:" + (i+1) + ":" + (j+1)] = verses[i][j].meaning;
+      }
+    }
+
+    console.log(JSON.stringify(translations));*/
+
+</script>
+</head>
+<body>
+  <center>
+  <p><a href="#" onclick="toggleTranslation();">Toggle Translation</a> | <a href="#" onclick="sound.playing() ? sound.pause() : sound.play();">Play/Pause</a></p>
+  </center>
+
+  <!-- <a href="jq_sort.html">Go To Sort By Verse</a> |  <a href="#" onclick="randomizeAllVerse();">Randomize Words</a> |  -->
+
+  <h1 style="text-align: center; direction: rtl; font-size: 2em; font-family: ZekrQuran;" class="surah-title"></h1>
+  <h3 id="loading-recitation" style="text-align: center; direction: ltr; font-size: 1.2em;">Loading recitation...</h3>
+
+  <div id="template">
+    <ul class="verse">
+    </ul>
+
+    <li class="word"><span class="arabic noselect"></span><br><div class="meaning noselect"></div><div class="timing noselect" time="" style="display: none;"></div></li>
+
+    <li class="verse-number noselect">(<span class="verse-index noselect"></span>)</li>
+  </div>
+
+  <ul class="content collection">
+  </ul>
+
+</body>
+</html>
